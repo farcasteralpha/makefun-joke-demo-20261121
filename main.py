@@ -7,13 +7,13 @@ Deterministic, no network, no dependencies.
 
 The text is validated against the competition gate before it is
 written (UTF-8, 1-280 Unicode code points, not only whitespace, a
-single line), and it is written atomically so a reader never sees a
-half-written file.
+single line). It is written directly to entry.txt: the grader's
+output rule allows only plain file names in /output (no dot-files),
+so no temporary file is ever created inside the output directory.
 """
 
 import os
 import sys
-import tempfile
 
 JOKE = (
     "My coding agent crashed the live demo, then filed a bug report "
@@ -45,22 +45,19 @@ def build_entry_text() -> str:
 
 
 def write_entry(out_dir: str, text: str) -> str:
-    """Write text atomically to <out_dir>/entry.txt; return its path."""
+    """Write text directly to <out_dir>/entry.txt; return its path.
+
+    A plain direct write: no temporary file is created, so /output
+    holds exactly one file with a plain name (entry.txt) in a
+    normally readable mode.
+    """
     os.makedirs(out_dir, exist_ok=True)
     path = os.path.join(out_dir, "entry.txt")
-    fd, tmp_path = tempfile.mkstemp(
-        dir=out_dir, prefix=".entry.", suffix=".tmp"
-    )
-    try:
-        with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as f:
-            f.write(text)
-        os.replace(tmp_path, path)
-    except BaseException:
-        try:
-            os.unlink(tmp_path)
-        except OSError:
-            pass
-        raise
+    with open(path, "w", encoding="utf-8", newline="\n") as f:
+        f.write(text)
+    # World-readable regardless of the sandbox umask, so the grader
+    # can always read the output back (mkstemp's 0600 could not).
+    os.chmod(path, 0o644)
     return path
 
 
